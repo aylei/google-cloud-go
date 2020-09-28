@@ -382,6 +382,10 @@ func (c *Client) ReadWriteTransaction(ctx context.Context, f func(context.Contex
 		ts, err = t.runInTransaction(ctx, f)
 		return err
 	})
+	useShortConn, ok := ctx.Value("UseShortConn").(bool)
+	if ok && useShortConn {
+		sh.getClient().Close()
+	}
 	if sh != nil {
 		sh.recycle()
 	}
@@ -421,13 +425,10 @@ func (c *Client) Apply(ctx context.Context, ms []*Mutation, opts ...ApplyOption)
 	for _, opt := range opts {
 		opt(ao)
 	}
-	useShortConn, ok := ctx.Value("UseShortConn").(bool)
-	if !ok || !useShortConn {
-		if !ao.atLeastOnce {
-			return c.ReadWriteTransaction(ctx, func(ctx context.Context, t *ReadWriteTransaction) error {
-				return t.BufferWrite(ms)
-			})
-		}
+	if !ao.atLeastOnce {
+		return c.ReadWriteTransaction(ctx, func(ctx context.Context, t *ReadWriteTransaction) error {
+			return t.BufferWrite(ms)
+		})
 	}
 
 	ctx = trace.StartSpan(ctx, "cloud.google.com/go/spanner.Apply")

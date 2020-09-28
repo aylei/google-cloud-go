@@ -822,6 +822,25 @@ func (p *sessionPool) takeWriteSession(ctx context.Context) (*sessionHandle, err
 			trace.TracePrintf(ctx, map[string]interface{}{"sessionID": s.getID()},
 				"Created session")
 		}
+		useShortConn, ok := ctx.Value("UseShortConn").(bool)
+		if ok && useShortConn {
+			allOpts := []option.ClientOption{
+				option.WithEndpoint(endpoint),
+				option.WithScopes(Scope),
+				option.WithGRPCDialOption(
+					grpc.WithDefaultCallOptions(
+						grpc.MaxCallSendMsgSize(100<<20),
+						grpc.MaxCallRecvMsgSize(100<<20),
+					),
+				),
+				//option.WithGRPCConnectionPool(config.NumChannels),
+			}
+			grpcConn, err := gtransport.Dial(ctx, allOpts...)
+			if err != nil {
+				return nil, err
+			}
+			s.client, err = vkit.NewClient(ctx, option.WithGRPCConn(grpcConn))
+		}
 		if !s.isWritePrepared() {
 			if err = s.prepareForWrite(ctx); err != nil {
 				s.recycle()
@@ -830,6 +849,7 @@ func (p *sessionPool) takeWriteSession(ctx context.Context) (*sessionHandle, err
 				return nil, toSpannerError(err)
 			}
 		}
+
 		return &sessionHandle{session: s}, nil
 	}
 }
