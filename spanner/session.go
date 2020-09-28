@@ -757,6 +757,7 @@ func (p *sessionPool) take(ctx context.Context) (*sessionHandle, error) {
 // returned should be used for read write transactions.
 func (p *sessionPool) takeWriteSession(ctx context.Context) (*sessionHandle, error) {
 	trace.TracePrintf(ctx, nil, "Acquiring a read-write session")
+	replaced := false
 	for {
 		var (
 			s   *session
@@ -823,7 +824,7 @@ func (p *sessionPool) takeWriteSession(ctx context.Context) (*sessionHandle, err
 				"Created session")
 		}
 		useShortConn, ok := ctx.Value("UseShortConn").(bool)
-		if ok && useShortConn {
+		if ok && useShortConn && !replaced {
 			allOpts := []option.ClientOption{
 				option.WithEndpoint(endpoint),
 				option.WithScopes(Scope),
@@ -839,7 +840,13 @@ func (p *sessionPool) takeWriteSession(ctx context.Context) (*sessionHandle, err
 			if err != nil {
 				return nil, err
 			}
+			oldClient := s.client
 			s.client, err = vkit.NewClient(ctx, option.WithGRPCConn(grpcConn))
+			if err != nil {
+				return nil, err
+			}
+			oldClient.Close()
+			replaced = true
 		}
 		if !s.isWritePrepared() {
 			if err = s.prepareForWrite(ctx); err != nil {
