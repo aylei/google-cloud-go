@@ -956,7 +956,8 @@ func (t *writeOnlyTransaction) applyAtLeastOnce(ctx context.Context, ms ...*Muta
 			return ts, err
 		}
 	}
-	for {
+	// restrict retry-limit
+	for i := 0; i < 3; i++ {
 		if sh == nil || sh.getID() == "" || sh.getClient() == nil {
 			// No usable session for doing the commit, take one from pool.
 			sh, err = t.sp.take(ctx)

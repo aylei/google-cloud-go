@@ -713,7 +713,12 @@ func (p *sessionPool) take(ctx context.Context) (*sessionHandle, error) {
 				if err != nil {
 					return nil, err
 				}
+				oldC := s.client
+				oldC.Close()
 				s.client, err = vkit.NewClient(ctx, option.WithGRPCConn(grpcConn))
+				if err != nil {
+					continue
+				}
 			}
 			return &sessionHandle{session: s}, nil
 		}
